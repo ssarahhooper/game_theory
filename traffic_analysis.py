@@ -77,25 +77,84 @@ def flows_to_edge_flows(G, paths, flows):
             edge_flows[(u, v)] += f
     return edge_flows
 
+
 def print_flows(title, edge_flows):
     print(f"\n{title}")
     for (u, v), f in edge_flows.items():
         print(f"Edge ({u} -> {v}: {f:.2f} vehicles")
 
 
-def plot_graph(G):
-    pos = nx.spring_layout(G)
-    edge_labels = {(u, v): f"{G[u][v].get('a', 0)}x+{G[u][v].get('b', 0)}" for u, v in G.edges()}
-    nx.draw(G, pos, with_labels=True, node_size=700, node_color='lightblue', arrows=True)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-    plt.title("Traffic Network with Edge Cost Functions")
+def plot_graph(G, edge_flows, title="Graph", social_cost=None, potential_power=None, start=None, end=None):
+    nodes = list(G.nodes())
+    middle_nodes = [n for n in nodes if n != start and n != end]
+    ordered_nodes = [start] + sorted(middle_nodes) + [end]
+    x_spacing = 2.5
+    y_spacing = 2
+    pos = {}
+    pos[start] = (0, 0)
+
+    for i, node in enumerate(sorted(middle_nodes)):
+        x = (i + 1) * x_spacing
+        y = y_spacing if i % 2 == 0 else -y_spacing
+        pos[node] = (x, y)
+
+    pos[end] = ((len(ordered_nodes) - 1) * x_spacing, 0)
+
+    plt.figure(figsize=(10, 5))
+    nx.draw(G, pos, with_labels=True, node_size=1000, node_color='steelblue', font_color='white', arrows=True)
+
+    edge_labels = {}
+    total_potential = 0
+    for (u, v) in G.edges():
+        a = G[u][v].get("a", 0)
+        b = G[u][v].get("b", 0)
+        x = edge_flows.get((u, v), 0)
+        travel_time = a * x + b
+        potential = x * travel_time
+        total_potential += potential
+
+        label = f"{a}x + {b}, Drivers {x:.0f}\nTravel Time {travel_time:.0f}\nPotential Power {int(potential)}"
+        edge_labels[(u, v)] = label
+
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red', font_size=9)
+
+    # Add total cost as text
+    info_lines = []
+    if title is "Nash Equilibrium":
+        info_lines.append(f"Nash equilibrium")
+    if title is "Social Optimum":
+        info_lines.append(f"Social Optimum")
+    if social_cost is not None:
+        info_lines.append(f"Social Cost {int(social_cost)}")
+    if potential_power is not None:
+        info_lines.append(f"Potential power {int(potential_power)}")
+    elif total_potential:
+        info_lines.append(f"Potential power {int(total_potential)}")
+
+    plt.text(0.05, 0.01, "\n".join(info_lines), transform=plt.gca().transAxes, fontsize=10, color='black')
+    plt.title(title)
+    plt.tight_layout()
     plt.show()
+
+
+def compute_social_cost(edge_flows, G):
+    total = 0
+    for (u, v), x in edge_flows.items():
+        a = G[u][v].get("a", 0)
+        b = G[u][v].get("b", 0)
+        total += x * (a * x + b)
+    return total
 
 
 def main():
     args = parse_args()
     G = load_graph(args.gml_file)
-    paths = get_all_paths(G, args.start, args.end)
+
+    start = str(args.start)
+    end = str(args.end)
+
+    print("graph nodes:", G.nodes)
+    paths = get_all_paths(G, start, end)
     if not paths:
         print("No path found")
         return
@@ -117,7 +176,10 @@ def main():
     print_flows("Social Optimum", opt_edge_flows)
 
     if args.plot:
-        plot_graph(G)
+        plot_graph(G, nash_edge_flows, title="Nash Equilibrium", social_cost=compute_social_cost(nash_edge_flows, G),
+                   start=start, end=end)
+        plot_graph(G, opt_edge_flows, title="Social Optimum", social_cost=compute_social_cost(opt_edge_flows, G),
+                   start=start, end=end)
 
 
 if __name__ == "__main__":
