@@ -64,6 +64,64 @@ def assign_flow_social_optimum(G, paths, n):
     return res.x if res.success else None
 
 
+def assign_flows_nash_equilibrium(G, paths, n):
+    # Placeholder: simple equal distribution as approximation
+    return np.ones(len(paths)) * (n / len(paths))
+
+
+def flows_to_edge_flows(G, paths, flows):
+    edge_flows = {(u, v): 0 for u, v in G.edges()}
+    for f, path in zip(flows, paths):
+        for i in range(len(path) - 1):
+            u, v = path[i], path[i + 1]
+            edge_flows[(u, v)] += f
+    return edge_flows
+
+def print_flows(title, edge_flows):
+    print(f"\n{title}")
+    for (u, v), f in edge_flows.items():
+        print(f"Edge ({u} -> {v}: {f:.2f} vehicles")
+
+
+def plot_graph(G):
+    pos = nx.spring_layout(G)
+    edge_labels = {(u, v): f"{G[u][v].get('a', 0)}x+{G[u][v].get('b', 0)}" for u, v in G.edges()}
+    nx.draw(G, pos, with_labels=True, node_size=700, node_color='lightblue', arrows=True)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.title("Traffic Network with Edge Cost Functions")
+    plt.show()
+
+
+def main():
+    args = parse_args()
+    G = load_graph(args.gml_file)
+    paths = get_all_paths(G, args.start, args.end)
+    if not paths:
+        print("No path found")
+        return
+
+    n = args.vehicles
+
+    # compute Nash and optimal flows
+    # nash find equal distribution
+    nash_flows = assign_flows_nash_equilibrium(G, paths, n)
+    # social optimization
+    opt_flows = assign_flow_social_optimum(G, paths, n)
+
+    # converts path level flows to edge level flows
+    nash_edge_flows = flows_to_edge_flows(G, paths, nash_flows)
+    opt_edge_flows = flows_to_edge_flows(G, paths, opt_flows)
+
+    # print results
+    print_flows("Nash Equilibrium", nash_edge_flows)
+    print_flows("Social Optimum", opt_edge_flows)
+
+    if args.plot:
+        plot_graph(G)
+
+
+if __name__ == "__main__":
+    main()
 
 
 
